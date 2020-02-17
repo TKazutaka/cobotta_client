@@ -11,12 +11,6 @@ int main(int argc, char** argv)
 
   CommunicateMaster cm(nh);
 
-  if (!cm.connectMaster())
-  {
-    std::cerr << "\n[FAILURE] Failed to connect master \n" << std::endl;
-    return -1;
-  }
-
   while (ros::ok())
   {
     if (!cm.moveRobot())
@@ -24,6 +18,7 @@ int main(int argc, char** argv)
       std::cerr << "\n[ERROR] Robot has error while working !! \n" << std::endl;
       return -1;
     }
+    ros::spinOnce();
     ros::Duration(0.1).sleep();
   }
 

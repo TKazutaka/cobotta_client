@@ -9,19 +9,13 @@
 #include <denso_gripper_srvs/Move.h>
 #include <denso_gripper_srvs/SetPosition.h>
 
-static const int MIN_BUFFER_SIZE = 10;
-static const int MAX_BUFFER_SIZE = 100000;
 static const double WORK_OFFSET = 0.05;
 
 using communicate_master::CommunicateMaster;
 
 // Constructor
-CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh), sockfd_(-1)
+CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh)
 {
-  ros::param::param<int>("~port_number", port_number_, 1234); // port number for socket
-  ros::param::param<int>("~object_pose_buffer_size", object_pose_buffer_size_, 24); // recieve data buffer from master
-  ros::param::param<int>("~message_buffer_size", message_buffer_size_, 1000); // send data buffer to master
-  ros::param::param<std::string>("~master_ip_address", master_ip_address_, "None"); // master ip address
   ros::param::param<double>("~grasp_offset", grasp_offset_, 0.1); // offset for grasping
   ros::param::param<double>("~grasp_close_pos", grasp_close_pos_, 15); // gripper close range for grasping
   moving_service_ = nh.serviceClient<denso_state_srvs::Moving>("/state_behavior/moving");
@@ -29,8 +23,7 @@ CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh), sockfd_(-1)
   gripper_open_service_ = nh.serviceClient<denso_gripper_srvs::Move>("/parallel_gripper/open");
   gripper_close_service_ = nh.serviceClient<denso_gripper_srvs::Move>("/parallel_gripper/close");
   gripper_set_position_service_ = nh.serviceClient<denso_gripper_srvs::SetPosition>("/parallel_gripper/set_position");
-  FD_ZERO(&fds_);
-  FD_SET(sockfd_, &fds_);
+  object_pos_sub_ = nh.subscribe("/object_position", 10, &CommunicateMaster::receiveValue, this);
 
   std::cout << "[SUCCESS] Initialize CommunicateMaster class !! " << std::endl;
 }
@@ -38,161 +31,30 @@ CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh), sockfd_(-1)
 // Destractor
 CommunicateMaster::~CommunicateMaster()
 {
-  close(sockfd_);
-  // pthread_join(tid_, NULL);
-  std::cout << "[FINISH] Finish socket connection !!" << std::endl;
+  std::cout << "[FINISH] Finish !!" << std::endl;
 }
 
-// Function to connect with master
-bool CommunicateMaster::connectMaster()
+void CommunicateMaster::receiveValue(const geometry_msgs::Vector3::ConstPtr& msg)
 {
-  // Except error of recieving buffer size from master
-  if (object_pose_buffer_size_ < MIN_BUFFER_SIZE)
-  {
-    std::cerr << "[FAILURE] Buffer size is too few to recieve the data from master !! " << std::endl;
-    return false;
-  }
-  else if (object_pose_buffer_size_ > MAX_BUFFER_SIZE)
-  {
-    std::cerr << "[FAILURE] Buffer size is too much to recieve the data from master !! " << std::endl;
-    return false;
-  }
-  else
-  {
-    std::cout << "[SUCCESS] Set recieving buffer size to " << object_pose_buffer_size_ << " " << std::endl;
-  }
+  std::cout << "Receive !!" << std::endl;
 
-  // Except error of sending buffer size to master
-  // if (message_buffer_size_ < MIN_BUFFER_SIZE)
-  // {
-  //   std::cerr << "[FAILURE] Buffer size is too few to send the data to master !! " << std::endl;
-  //   return false;
-  // }
-  // else if (message_buffer_size_ > MAX_BUFFER_SIZE)
-  // {
-  //   std::cerr << "[FAILURE] Buffer size is too much to send the data to master !! " << std::endl;
-  //   return false;
-  // }
-  // else
-  // {
-  //   std::cout << "[SUCCESS] Set sending buffer size to " << message_buffer_size_ << " " << std::endl;
-  // }
-
-  // Create socket
-  if ((sockfd_ = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-  {
-    std::cerr << "[FAILURE] Failed to ready client socket !!" << std::endl;
-    return false;
-  }
-  else
-  {
-    std::cout << "[SUCCESS] Success to ready client socket !!" << std::endl;
-  }
-
-  // Convert std::string to char contena for matching type
-  char convert_ip[master_ip_address_.size()];
-  for (int i=0; i < master_ip_address_.size(); i++)
-  {
-    convert_ip[i] = master_ip_address_[i];
-  }
-
-  addr_.sin_family = AF_INET;
-  addr_.sin_port = htons(port_number_);
-  addr_.sin_addr.s_addr = inet_addr(convert_ip);
-
-  // Connect with master
-  connect(sockfd_, (struct sockaddr* )&addr_, sizeof(struct sockaddr_in));
-  std::cout << "[SUCCESS] Connect master !!" << std::endl;
-
-  return true;
-}
-
-// void* CommunicateMaster::waitReceiveThread(void* p_param)
-// {
-//   int recv_size;
-
-//   std::cout << __LINE__ << std::endl;
-
-//   while(1)
-//   {
-//     std::cout << __LINE__ << std::endl;
-//     double object_pose[object_pose_buffer_size_];
-//     recv_size = recv(sockfd_, object_pose, object_pose_buffer_size_, 0);
-//     std::cout << __LINE__ << std::endl;
-
-//     if (recv_size == 0)
-//     {
-//       break;
-//     }
-
-//     std::vector<double> object_pose_vec;
-//     object_pose_vec.clear();
-//     for (int i; i < object_pose_buffer_size_; i++)
-//     {
-//       object_pose_vec.push_back(object_pose[i]);
-//     }
-
-//     std::cout << __LINE__ << std::endl;
-//     work_order_.push(object_pose_vec);
-//   }
-
-//   std::cout << __LINE__ << std::endl;
-
-//   return NULL;
-// }
-
-void CommunicateMaster::waitReceive()
-{
-  double object_pose[object_pose_buffer_size_];
-  struct timeval tv;
-  int retval;
-
-  tv.tv_sec = 0;
-  tv.tv_usec = 10;
-
-  FD_ZERO(&fds_);
-  FD_SET(sockfd_, &fds_);
-
-  retval = select(sockfd_ + 1, &fds_, NULL, NULL, &tv);
-
-  if (FD_ISSET(sockfd_, &fds_))
-  {
-    recv(sockfd_, object_pose, object_pose_buffer_size_, 0);
-
-    std::vector<double> object_pose_vec;
-    object_pose_vec.clear();
-    size_t array_size = object_pose_buffer_size_ / sizeof(double);
-    for (int i=0; i < array_size; i++)
-    {
-      std::cout << "object_pose : " << object_pose[i] << std::endl;
-      object_pose_vec.push_back(object_pose[i]);
-    }
-
-    work_order_.push(object_pose_vec);
-
-    std::cout << "Receive !!" << std::endl;
-  }
+  std::vector<double> object_pose_vec;
+  object_pose_vec.clear();
+  object_pose_vec.push_back(msg->x);
+  object_pose_vec.push_back(msg->y);
+  object_pose_vec.push_back(msg->z);
+  work_order_.push(object_pose_vec);
+  
 }
 
 // Function for moveing robot
 bool CommunicateMaster::moveRobot()
 {
-  // pthread_create(&tid_, NULL, (THREADFUNCPTR) &CommunicateMaster::waitReceiveThread, NULL);
-
-  // Ready data contena for receiving from master
-  // double object_pose[object_pose_buffer_size_] = {};
-
-  waitReceive();
 
   std::cout << "\n======================================="
             << "\n    Receive object pose from master    "
             << "\n======================================="
             << std::endl;
-
-  // Recieve object pose from master
-  // recv(sockfd_, object_pose, object_pose_buffer_size_, 0);
-
-  // std::cout << "\n[SUCCESS] Complete to receive object pose !! " << std::endl;
 
   if (work_order_.empty())
   {
@@ -202,8 +64,10 @@ bool CommunicateMaster::moveRobot()
 
   std::vector<double> object_pose;
   object_pose.clear();
+  std::cout << "[before pop] queue size: " << work_order_.size() << std::endl;
   object_pose = work_order_.front();
   work_order_.pop();
+  std::cout << "[after pop] queue size: " << work_order_.size() << std::endl;
 
   std::cout << "\n[SUCCESS] Complete to receive object pose !! " << std::endl;
 
@@ -281,13 +145,6 @@ bool CommunicateMaster::moveRobot()
             << "\n  Close parallel gripper for grasping object  "
             << "\n=============================================="
             << std::endl;
-
-  // Close parallel gripper for grasping object
-  // if (!gripper_close_service_.call(gripper_move_srv))
-  // {
-  //   ROS_ERROR("Failed to close gripper !!");
-  //   return false;
-  // }
 
   denso_gripper_srvs::SetPosition set_pos_srv_;
   set_pos_srv_.request.position = grasp_close_pos_;
@@ -379,20 +236,6 @@ bool CommunicateMaster::moveRobot()
   }
 
   std::cout << "\n[SUCCESS] Complete to move to initial position !! " << std::endl;
-
-  ros::Duration(0.1).sleep();
-
-  std::cout << "\n===================================="
-            << "\n   Send finish message to master    "
-            << "\n===================================="
-            << std::endl;
-
-  // Send success message to master
-  // if (send(sockfd_, "success", message_buffer_size_, 0) < 0)
-  // {
-  //   std::cerr << "\n[FAILURE] Failed to send finish message to master !! " << std::endl;
-  //   return false;
-  // }
 
   std::cout << "\n*************************************"
             << "\n**********  Success work  ***********"

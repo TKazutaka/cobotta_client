@@ -3,6 +3,8 @@
 
 #include <ros/ros.h>
 
+#include <geometry_msgs/Vector3.h>
+
 #include <string>
 #include <vector>
 #include <queue>
@@ -13,7 +15,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-typedef void * (*THREADFUNCPTR)(void *);
 
 namespace communicate_master
 {
@@ -22,12 +23,10 @@ class CommunicateMaster
 public:
   CommunicateMaster(ros::NodeHandle& nh);
   ~CommunicateMaster();
-  bool connectMaster();
   bool moveRobot();
 private:
 //   void* waitReceiveThread(void* p_param);
-  void waitReceive();
-  int sockRewind(int s);
+  void receiveValue(const geometry_msgs::Vector3::ConstPtr& msg);
 private:
   ros::NodeHandle nh_;
   ros::ServiceClient moving_service_;
@@ -35,15 +34,8 @@ private:
   ros::ServiceClient gripper_open_service_;
   ros::ServiceClient gripper_close_service_;
   ros::ServiceClient gripper_set_position_service_;
-  int port_number_;
-  int sockfd_;
-  int object_pose_buffer_size_;
-  int message_buffer_size_;
-  std::string master_ip_address_;
+  ros::Subscriber object_pos_sub_;
   std::queue<std::vector<double> > work_order_;
-  struct sockaddr_in addr_;
-  fd_set fds_;
-  // pthread_t tid_;
   double grasp_offset_;
   double grasp_close_pos_;
 };

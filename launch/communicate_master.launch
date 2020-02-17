@@ -2,17 +2,17 @@
 <launch>
   <arg name="port_number" default="50000" />
   <arg name="object_pose_buffer_size" default="24" />
-  <arg name="message_buffer_size" default="1000" />
   <arg name="master_ip_address" default="192.168.0.100" />
   <arg name="grasp_offset" default="0.055" />
   <arg name="grasp_close_pos" default="15" />
 
   <node pkg="cobotta_client" type="communicate_master" name="communicate_master_node" output="screen">
-    <param name="port_number" value="$(arg port_number)" />
-    <param name="object_pose_buffer_size" value="$(arg object_pose_buffer_size)" />
-    <param name="message_buffer_size" value="$(arg message_buffer_size)" />
-    <param name="master_ip_address" value="$(arg master_ip_address)" />
     <param name="grasp_offset" value="$(arg grasp_offset)" />
     <param name="grasp_close_pos" value="$(arg grasp_close_pos)" />
+  </node>
+  <node pkg="cobotta_client" type="client_socket.py" name="client_socket" output="screen">
+    <param name="port_number" value="$(arg port_number)" />
+    <param name="object_pose_buffer_size" value="$(arg object_pose_buffer_size)" />
+    <param name="master_ip_address" value="$(arg master_ip_address)" />
   </node>
 </launch>
