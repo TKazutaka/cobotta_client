@@ -14,10 +14,11 @@ static const double WORK_OFFSET = 0.05;
 using communicate_master::CommunicateMaster;
 
 // Constructor
-CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh)
+CommunicateMaster::CommunicateMaster(ros::NodeHandle& nh) : nh_(nh), finish_work_(false)
 {
   ros::param::param<double>("~grasp_offset", grasp_offset_, 0.1); // offset for grasping
   ros::param::param<double>("~grasp_close_pos", grasp_close_pos_, 15); // gripper close range for grasping
+  ros::param::param<int>("~order_timeout", time_count_, 200);
   moving_service_ = nh.serviceClient<denso_state_srvs::Moving>("/state_behavior/moving");
   gripper_activate_service_ = nh.serviceClient<denso_gripper_srvs::ActivateGripper>("/parallel_gripper/activate");
   gripper_open_service_ = nh.serviceClient<denso_gripper_srvs::Move>("/parallel_gripper/open");
@@ -51,14 +52,64 @@ void CommunicateMaster::receiveValue(const geometry_msgs::Vector3::ConstPtr& msg
 bool CommunicateMaster::moveRobot()
 {
 
-  std::cout << "\n======================================="
-            << "\n    Receive object pose from master    "
-            << "\n======================================="
-            << std::endl;
-
   if (work_order_.empty())
   {
-    std::cout << "\n[INFO] Not work order from master !!" << std::endl;
+    time_count_ -= 1;
+    if (time_count_ == 0)
+    {
+      std::cout << "No order" << std::endl;
+      finish_work_ = true;
+    }
+    else if (time_count_ < 0)
+    {
+      return true;
+    }
+    else
+    {
+      if (time_count_ % 5 == 0)
+      {
+        std::cout << "Wait next order..." << std::endl;
+      }
+      return true;
+    }
+  }
+
+  denso_state_srvs::Moving move_srv;
+
+  if (finish_work_)
+  {
+    // Define robot default position
+    geometry_msgs::PoseStamped default_position;
+    default_position.pose.position.x = -0.034074;
+    default_position.pose.position.y = -0.070623;
+    default_position.pose.position.z = 0.34166;
+    default_position.pose.orientation.x = 0.46538;
+    default_position.pose.orientation.y = 0.0057988;
+    default_position.pose.orientation.z = 0.81983;
+    default_position.pose.orientation.w =0.33357;
+
+    std::cout << "\n===================================="
+              << "\n   Robot move to initial position   "
+              << "\n===================================="
+              << std::endl;
+
+    // Moving robot to the default position
+    move_srv.request.target_pose = default_position;
+    if (!moving_service_.call(move_srv))
+    {
+      ROS_ERROR("Failed to move robot !!");
+      return false;
+    }
+
+    std::cout << "\n[SUCCESS] Complete to move to initial position !! " << std::endl;
+
+    std::cout << "\n*************************************"
+              << "\n**********  Success work  ***********"
+              << "\n*************************************"
+              << std::endl;
+
+    finish_work_ = false;
+
     return true;
   }
 
@@ -68,6 +119,7 @@ bool CommunicateMaster::moveRobot()
   object_pose = work_order_.front();
   work_order_.pop();
   std::cout << "[after pop] queue size: " << work_order_.size() << std::endl;
+  int queue_size = work_order_.size();
 
   std::cout << "\n[SUCCESS] Complete to receive object pose !! " << std::endl;
 
@@ -111,13 +163,12 @@ bool CommunicateMaster::moveRobot()
   grasp_position.pose.position.x = object_pose[0];
   grasp_position.pose.position.y = object_pose[1];
   grasp_position.pose.position.z = object_pose[2]; // initialize
-  grasp_position.pose.orientation.x = 1;
-  grasp_position.pose.orientation.y = 0;
-  grasp_position.pose.orientation.z = 0;
-  grasp_position.pose.orientation.w = 0;
+  grasp_position.pose.orientation.x = 0.1;
+  grasp_position.pose.orientation.y = 1.0;
+  grasp_position.pose.orientation.z = 0.0;
+  grasp_position.pose.orientation.w = 0.0;
 
   // Moving robot to the position for grasping object
-  denso_state_srvs::Moving move_srv;
   grasp_position.pose.position.z = object_pose[2] + grasp_offset_ + WORK_OFFSET;
   move_srv.request.target_pose = grasp_position;
   if (!moving_service_.call(move_srv))
@@ -158,6 +209,17 @@ bool CommunicateMaster::moveRobot()
 
   ros::Duration(0.1).sleep();
 
+  // Moving robot to the position for grasping object
+  grasp_position.pose.position.z = object_pose[2] + grasp_offset_ + WORK_OFFSET;
+  move_srv.request.target_pose = grasp_position;
+  if (!moving_service_.call(move_srv))
+  {
+    ROS_ERROR("Failed to move robot !!");
+    return false;
+  }
+
+  ros::Duration(0.1).sleep();
+
   std::cout << "\n===================================="
             << "\n   Robot move to transport object   "
             << "\n===================================="
@@ -165,13 +227,13 @@ bool CommunicateMaster::moveRobot()
 
   // Define robot position for transporting object
   geometry_msgs::PoseStamped transport_position;
-  transport_position.pose.position.x = 0.111176; // TODO transport position x
-  transport_position.pose.position.y = -0.218825; // TODO transport position y
-  transport_position.pose.position.z = 0.1111; // TODO transport position z
-  transport_position.pose.orientation.x = 1;
-  transport_position.pose.orientation.y = 0;
-  transport_position.pose.orientation.z = 0;
-  transport_position.pose.orientation.w = 0;
+  transport_position.pose.position.x = 0.0 + 0.01 * queue_size; // TODO transport position x
+  transport_position.pose.position.y = -0.25; // TODO transport position y
+  transport_position.pose.position.z = 0.09; // TODO transport position z
+  transport_position.pose.orientation.x = 0.1;
+  transport_position.pose.orientation.y = 1.0;
+  transport_position.pose.orientation.z = 0.0;
+  transport_position.pose.orientation.w = 0.0;
 
   // Moving robot to the position for transporting object
   transport_position.pose.position.z += WORK_OFFSET; // TODO add transport position z
@@ -211,36 +273,6 @@ bool CommunicateMaster::moveRobot()
   std::cout << "\n[SUCCESS] Complete to release object !! " << std::endl;
 
   ros::Duration(0.1).sleep();
-
-  // Define robot default position
-  geometry_msgs::PoseStamped default_position;
-  default_position.pose.position.x = -0.034074;
-  default_position.pose.position.y = -0.070623;
-  default_position.pose.position.z = 0.34166;
-  default_position.pose.orientation.x = 0.46538;
-  default_position.pose.orientation.y = 0.0057988;
-  default_position.pose.orientation.z = 0.81983;
-  default_position.pose.orientation.w =0.33357;
-
-  std::cout << "\n===================================="
-            << "\n   Robot move to initial position   "
-            << "\n===================================="
-            << std::endl;
-
-  // Moving robot to the default position
-  move_srv.request.target_pose = default_position;
-  if (!moving_service_.call(move_srv))
-  {
-    ROS_ERROR("Failed to move robot !!");
-    return false;
-  }
-
-  std::cout << "\n[SUCCESS] Complete to move to initial position !! " << std::endl;
-
-  std::cout << "\n*************************************"
-            << "\n**********  Success work  ***********"
-            << "\n*************************************"
-            << std::endl;
 
   return true;
 }

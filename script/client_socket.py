@@ -7,7 +7,7 @@ from geometry_msgs.msg import Vector3
 
 if __name__ == "__main__":
     rospy.init_node("client_socket")
-    object_pos_pub = rospy.Publisher("/object_position", Vector3, queue_size=1)
+    object_pos_pub = rospy.Publisher("/object_position", Vector3, queue_size=10)
     port_number = rospy.get_param("~port_number", 50000)
     buf_size = rospy.get_param("~object_pose_buffer_size", 24)
     ip_addr = rospy.get_param("~master_ip_address", "192.168.0.100")
@@ -16,7 +16,6 @@ if __name__ == "__main__":
     s.connect((ip_addr, port_number))
     while not rospy.is_shutdown():
         data = s.recv(buf_size)
-        print(len(data))
         try:
             res = struct.unpack('<ddd', data)
             print(res)
@@ -26,6 +25,5 @@ if __name__ == "__main__":
             msg.z = res[2]
             object_pos_pub.publish(msg)
         except:
-            print("no data")
             sleep(1.0)
     s.close()

@@ -3,12 +3,14 @@
   <arg name="port_number" default="50000" />
   <arg name="object_pose_buffer_size" default="24" />
   <arg name="master_ip_address" default="192.168.0.100" />
-  <arg name="grasp_offset" default="0.055" />
+  <arg name="order_timeout" default="200" />
+  <arg name="grasp_offset" default="0.045" />
   <arg name="grasp_close_pos" default="15" />
 
   <node pkg="cobotta_client" type="communicate_master" name="communicate_master_node" output="screen">
     <param name="grasp_offset" value="$(arg grasp_offset)" />
     <param name="grasp_close_pos" value="$(arg grasp_close_pos)" />
+    <param name="order_timeout" value="$(arg order_timeout)" />
   </node>
   <node pkg="cobotta_client" type="client_socket.py" name="client_socket" output="screen">
     <param name="port_number" value="$(arg port_number)" />

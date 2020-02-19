@@ -36,6 +36,8 @@ private:
   ros::ServiceClient gripper_set_position_service_;
   ros::Subscriber object_pos_sub_;
   std::queue<std::vector<double> > work_order_;
+  bool finish_work_;
+  int time_count_;
   double grasp_offset_;
   double grasp_close_pos_;
 };
