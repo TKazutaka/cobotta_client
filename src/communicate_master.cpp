@@ -150,6 +150,33 @@ bool CommunicateMaster::moveRobot()
 
   ros::Duration(0.1).sleep();
 
+
+std::cout << "\n===================================="
+            << "\n   Robot move to start position   "
+            << "\n===================================="
+            << std::endl;
+
+  // Define robot start position
+  geometry_msgs::PoseStamped start_position;
+  start_position.pose.position.x = 0.248739;
+  start_position.pose.position.y = -0.0251371;
+  start_position.pose.position.z = 0.121517;
+  start_position.pose.orientation.x = -0.617241;
+  start_position.pose.orientation.y = 0.783325;
+  start_position.pose.orientation.z = -0.0111169;
+  start_position.pose.orientation.w = 0.0727498;
+
+  // Moving robot to the start position
+  move_srv.request.target_pose = start_position;
+  if (!moving_service_.call(move_srv))
+  {
+    ROS_ERROR("Failed to move robot !!");
+    return false;
+  }
+  std::cout << "\n[SUCCESS] Complete to move to start position !! " << std::endl;
+  ros::Duration(0.1).sleep();
+
+
   std::cout << "\n========================================="
             << "\n   Robot move to grasp object position   "
             << "\n========================================="
@@ -219,6 +246,21 @@ bool CommunicateMaster::moveRobot()
   }
 
   ros::Duration(0.1).sleep();
+  std::cout << "\n===================================="
+            << "\n   Robot move to start position   "
+            << "\n===================================="
+            << std::endl;
+
+ 
+  // Moving robot to the start position
+  move_srv.request.target_pose = start_position;
+  if (!moving_service_.call(move_srv))
+  {
+    ROS_ERROR("Failed to move robot !!");
+    return false;
+  }
+  std::cout << "\n[SUCCESS] Complete to move to start position !! " << std::endl;
+  ros::Duration(0.1).sleep();
 
   std::cout << "\n===================================="
             << "\n   Robot move to transport object   "
@@ -228,7 +270,7 @@ bool CommunicateMaster::moveRobot()
   // Define robot position for transporting object
   geometry_msgs::PoseStamped transport_position;
   transport_position.pose.position.x = 0.0 + 0.01 * queue_size; // TODO transport position x
-  transport_position.pose.position.y = -0.25; // TODO transport position y
+  transport_position.pose.position.y = 0.25; // TODO transport position y
   transport_position.pose.position.z = 0.09; // TODO transport position z
   transport_position.pose.orientation.x = 0.1;
   transport_position.pose.orientation.y = 1.0;
